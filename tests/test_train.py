@@ -110,6 +110,24 @@ def test_model_file_created(tmp_path):
     assert os.path.exists("models/model.pkl")
 
 
+def test_report_file_created(tmp_path):
+    """Kiem tra report.txt co confusion matrix, precision va recall."""
+    _use_temp_mlflow(tmp_path)
+    train_path, eval_path = _make_temp_data(tmp_path)
+    train(
+        _params("random_forest"),
+        data_path=train_path,
+        eval_path=eval_path,
+    )
+
+    assert os.path.exists("outputs/report.txt")
+    with open("outputs/report.txt") as f:
+        report = f.read()
+    assert "Confusion Matrix" in report
+    assert "precision" in report
+    assert "recall" in report
+
+
 def test_train_supports_gradient_boosting(tmp_path):
     """Kiem tra co the huan luyen voi GradientBoostingClassifier."""
     _use_temp_mlflow(tmp_path)

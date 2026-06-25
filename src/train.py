@@ -7,7 +7,12 @@ import joblib
 import os
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -47,6 +52,47 @@ def build_model(params: dict):
         )
 
     return model, model_type, model_params
+
+
+def write_performance_report(
+    model_type: str,
+    accuracy: float,
+    f1: float,
+    y_true,
+    y_pred,
+    report_path: str = "outputs/report.txt",
+) -> None:
+    """Ghi bao cao hieu suat dang text cho Bonus 3."""
+    labels = [0, 1, 2]
+    matrix = confusion_matrix(y_true, y_pred, labels=labels)
+    class_report = classification_report(
+        y_true,
+        y_pred,
+        labels=labels,
+        zero_division=0,
+    )
+
+    lines = [
+        "Model Performance Report",
+        f"model_type: {model_type}",
+        f"accuracy: {accuracy:.4f}",
+        f"f1_score: {f1:.4f}",
+        "",
+        "Confusion Matrix",
+        "labels: 0, 1, 2",
+    ]
+    lines.extend(" ".join(str(value) for value in row) for row in matrix)
+    lines.extend(
+        [
+            "",
+            "Classification Report",
+            class_report,
+        ]
+    )
+
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    with open(report_path, "w") as f:
+        f.write("\n".join(lines))
 
 
 def train(
@@ -94,10 +140,14 @@ def train(
         acc = accuracy_score(y_eval, preds)
         f1 = f1_score(y_eval, preds, average="weighted")
 
+        # Tao bao cao text gom confusion matrix, precision va recall cho Bonus 3.
+        write_performance_report(model_type, acc, f1, y_eval, preds)
+
         # Ghi chi so va artifact mo hinh vao MLflow.
         mlflow.log_metric("accuracy", acc)
         mlflow.log_metric("f1_score", f1)
         mlflow.sklearn.log_model(model, "model")
+        mlflow.log_artifact("outputs/report.txt")
 
         print(f"Accuracy: {acc:.4f} | F1: {f1:.4f}")
 
