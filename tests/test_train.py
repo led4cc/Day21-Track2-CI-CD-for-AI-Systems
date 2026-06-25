@@ -1,5 +1,6 @@
 import os
 import json
+import mlflow
 import numpy as np
 import pandas as pd
 from src.train import train
@@ -37,8 +38,14 @@ def _make_temp_data(tmp_path):
     return train_path, eval_path
 
 
+def _use_temp_mlflow(tmp_path):
+    """Tach MLflow test runs khoi thu muc mlruns cua repo."""
+    mlflow.set_tracking_uri((tmp_path / "mlruns").as_uri())
+
+
 def test_train_returns_float(tmp_path):
     """Kiem tra ham train() tra ve mot so thuc nam trong [0.0, 1.0]."""
+    _use_temp_mlflow(tmp_path)
     train_path, eval_path = _make_temp_data(tmp_path)
 
     acc = train(
@@ -53,6 +60,7 @@ def test_train_returns_float(tmp_path):
 
 def test_metrics_file_created(tmp_path):
     """Kiem tra file outputs/metrics.json duoc tao sau khi huan luyen."""
+    _use_temp_mlflow(tmp_path)
     train_path, eval_path = _make_temp_data(tmp_path)
     train(
         {"n_estimators": 10, "max_depth": 3},
@@ -69,6 +77,7 @@ def test_metrics_file_created(tmp_path):
 
 def test_model_file_created(tmp_path):
     """Kiem tra file models/model.pkl duoc tao sau khi huan luyen."""
+    _use_temp_mlflow(tmp_path)
     train_path, eval_path = _make_temp_data(tmp_path)
     train(
         {"n_estimators": 10, "max_depth": 3},
