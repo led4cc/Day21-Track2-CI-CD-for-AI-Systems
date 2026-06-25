@@ -39,6 +39,25 @@ def _make_temp_data(tmp_path):
     return train_path, eval_path
 
 
+def _make_imbalanced_temp_data(tmp_path):
+    """Tao dataset co lop 2 duoi 10% de kiem tra canh bao drift."""
+    rng = np.random.default_rng(1)
+    n = 120
+
+    X = rng.random((n, len(FEATURE_NAMES)))
+    y = np.array([0] * 60 + [1] * 55 + [2] * 5)
+
+    df = pd.DataFrame(X, columns=FEATURE_NAMES)
+    df["target"] = y
+
+    train_path = str(tmp_path / "imbalanced_train.csv")
+    eval_path = str(tmp_path / "imbalanced_eval.csv")
+    df.iloc[:100].to_csv(train_path, index=False)
+    df.iloc[100:].to_csv(eval_path, index=False)
+
+    return train_path, eval_path
+
+
 def _use_temp_mlflow(tmp_path):
     """Tach MLflow test runs khoi thu muc mlruns cua repo."""
     mlflow.set_tracking_uri((tmp_path / "mlruns").as_uri())
@@ -95,6 +114,8 @@ def test_metrics_file_created(tmp_path):
         metrics = json.load(f)
     assert "accuracy" in metrics
     assert "f1_score" in metrics
+    assert "label_distribution" in metrics
+    assert set(metrics["label_distribution"]) == {"0", "1", "2"}
 
 
 def test_model_file_created(tmp_path):
@@ -126,6 +147,22 @@ def test_report_file_created(tmp_path):
     assert "Confusion Matrix" in report
     assert "precision" in report
     assert "recall" in report
+
+
+def test_imbalanced_labels_print_warning(tmp_path, capsys):
+    """Kiem tra canh bao khi mot lop chiem duoi 10% tap train."""
+    _use_temp_mlflow(tmp_path)
+    train_path, eval_path = _make_imbalanced_temp_data(tmp_path)
+    train(
+        _params("random_forest"),
+        data_path=train_path,
+        eval_path=eval_path,
+    )
+
+    captured = capsys.readouterr()
+    assert "Label 2 ratio:" in captured.out
+    assert "WARNING: label 2 ratio" in captured.out
+    assert "Possible data drift." in captured.out
 
 
 def test_train_supports_gradient_boosting(tmp_path):

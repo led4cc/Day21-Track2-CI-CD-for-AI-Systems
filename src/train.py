@@ -17,6 +17,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 EVAL_THRESHOLD = 0.70
+DRIFT_WARNING_THRESHOLD = 0.10
+LABELS = [0, 1, 2]
 
 
 def build_model(params: dict):
@@ -95,6 +97,24 @@ def write_performance_report(
         f.write("\n".join(lines))
 
 
+def check_label_distribution(y_train) -> dict:
+    """Tinh ty le nhan va in canh bao neu co lop qua it mau."""
+    total = len(y_train)
+    label_distribution = {}
+
+    for label in LABELS:
+        ratio = float((y_train == label).sum() / total) if total else 0.0
+        label_distribution[str(label)] = ratio
+        print(f"Label {label} ratio: {ratio:.4f}")
+        if ratio < DRIFT_WARNING_THRESHOLD:
+            print(
+                f"WARNING: label {label} ratio {ratio:.4f} is below "
+                f"{DRIFT_WARNING_THRESHOLD:.2f}. Possible data drift."
+            )
+
+    return label_distribution
+
+
 def train(
     params: dict,
     data_path: str = "data/train_phase1.csv",
@@ -132,6 +152,11 @@ def train(
         mlflow.log_param("model_type", model_type)
         mlflow.log_params(model_params)
 
+        # Kiem tra phan phoi nhan truoc khi huan luyen de phat hien data drift.
+        label_distribution = check_label_distribution(y_train)
+        for label, ratio in label_distribution.items():
+            mlflow.log_metric(f"label_ratio_{label}", ratio)
+
         # random_state giup ket qua co tinh tai tao trong lab va CI.
         model.fit(X_train, y_train)
 
@@ -154,7 +179,14 @@ def train(
         # Luu metrics ra file de GitHub Actions doc o cac buoc CI/CD tiep theo.
         os.makedirs("outputs", exist_ok=True)
         with open("outputs/metrics.json", "w") as f:
-            json.dump({"accuracy": acc, "f1_score": f1}, f)
+            json.dump(
+                {
+                    "accuracy": acc,
+                    "f1_score": f1,
+                    "label_distribution": label_distribution,
+                },
+                f,
+            )
 
         # Luu model dang pickle de job deploy co the upload len cloud storage.
         os.makedirs("models", exist_ok=True)
