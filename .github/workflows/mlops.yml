@@ -7,6 +7,7 @@ on:
       - 'data/**.dvc'
       - 'src/**.py'
       - 'params.yaml'
+      - '.github/workflows/mlops.yml'
   workflow_dispatch:
 
 jobs:
@@ -32,6 +33,84 @@ jobs:
 
       - name: Run unit tests
         run: pytest tests/ -v
+
+
+  # ---------------------------------------------------------------------------
+  # BONUS 2 - MULTI-ALGORITHM EXPERIMENTS
+  # Chay nhieu thuat toan trong cung mot workflow de so sanh tren DagsHub/MLflow.
+  # Job nay chi tao experiment va metrics artifact; model duoc deploy van do job
+  # Train/Eval/Deploy ben duoi quyet dinh.
+  # ---------------------------------------------------------------------------
+  bonus2_experiments:
+    name: Bonus 2 - ${{ matrix.model_type }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        model_type:
+          - random_forest
+          - gradient_boosting
+          - logistic_regression
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to Cloud Storage
+        run: |
+          python - <<'EOF'
+          import json
+          import os
+
+          credentials = json.loads(os.environ["CLOUD_CREDENTIALS"])
+          with open(os.environ["GITHUB_ENV"], "a") as env_file:
+              env_file.write(f"AWS_ACCESS_KEY_ID={credentials['aws_access_key_id']}\n")
+              env_file.write(f"AWS_SECRET_ACCESS_KEY={credentials['aws_secret_access_key']}\n")
+              env_file.write("AWS_DEFAULT_REGION=us-east-1\n")
+              env_file.write("AWS_REGION=us-east-1\n")
+          EOF
+        env:
+          CLOUD_CREDENTIALS: ${{ secrets.CLOUD_CREDENTIALS }}
+
+      - name: Pull data with DVC
+        run: dvc pull data/train_phase1.csv.dvc data/eval.csv.dvc
+
+      - name: Select algorithm
+        run: |
+          python - <<'EOF'
+          import os
+          import yaml
+
+          with open("params.yaml") as f:
+              params = yaml.safe_load(f)
+          params["model_type"] = os.environ["MODEL_TYPE"]
+          with open("params.yaml", "w") as f:
+              yaml.safe_dump(params, f, sort_keys=False)
+          print(f"Selected model_type={params['model_type']}")
+          EOF
+        env:
+          MODEL_TYPE: ${{ matrix.model_type }}
+
+      - name: Train experiment
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
+          MLFLOW_RUN_NAME: bonus2-${{ matrix.model_type }}
+        run: python src/train.py
+
+      - name: Save experiment metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: bonus2-metrics-${{ matrix.model_type }}
+          path: outputs/metrics.json
 
 
   # ---------------------------------------------------------------------------
