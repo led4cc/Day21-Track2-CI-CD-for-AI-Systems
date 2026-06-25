@@ -1,0 +1,21 @@
+Model Performance Report
+model_type: logistic_regression
+accuracy: 0.5560
+f1_score: 0.5516
+
+Confusion Matrix
+labels: 0, 1, 2
+112 58 3
+77 128 22
+7 55 38
+
+Classification Report
+              precision    recall  f1-score   support
+
+           0       0.57      0.65      0.61       173
+           1       0.53      0.56      0.55       227
+           2       0.60      0.38      0.47       100
+
+    accuracy                           0.56       500
+   macro avg       0.57      0.53      0.54       500
+weighted avg       0.56      0.56      0.55       500

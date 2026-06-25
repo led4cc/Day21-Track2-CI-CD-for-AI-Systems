@@ -169,20 +169,31 @@ jobs:
           ACC=$(python -c "import json; d=json.load(open('outputs/metrics.json')); print(d['accuracy'])")
           echo "accuracy=$ACC" >> "$GITHUB_OUTPUT"
 
-      - name: Upload model to Cloud Storage
+      - name: Upload candidate model to Cloud Storage
         run: |
           python - <<'EOF'
           import os
           import boto3
 
           bucket = os.environ["CLOUD_BUCKET"]
-          key = "models/latest/model.pkl"
-          boto3.client("s3", region_name="us-east-1").upload_file(
+          commit_sha = os.environ["GITHUB_SHA"]
+          s3 = boto3.client("s3", region_name="us-east-1")
+
+          model_key = f"models/candidates/{commit_sha}/model.pkl"
+          metrics_key = f"models/candidates/{commit_sha}/metrics.json"
+
+          s3.upload_file(
               "models/model.pkl",
               bucket,
-              key,
+              model_key,
           )
-          print(f"Uploaded models/model.pkl to s3://{bucket}/{key}")
+          s3.upload_file(
+              "outputs/metrics.json",
+              bucket,
+              metrics_key,
+          )
+          print(f"Uploaded candidate model to s3://{bucket}/{model_key}")
+          print(f"Uploaded candidate metrics to s3://{bucket}/{metrics_key}")
           EOF
         env:
           CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
@@ -207,15 +218,63 @@ jobs:
     needs: train
     runs-on: ubuntu-latest
     steps:
+      - name: Authenticate to Cloud Storage
+        run: |
+          python - <<'EOF'
+          import json
+          import os
+
+          credentials = json.loads(os.environ["CLOUD_CREDENTIALS"])
+          with open(os.environ["GITHUB_ENV"], "a") as env_file:
+              env_file.write(f"AWS_ACCESS_KEY_ID={credentials['aws_access_key_id']}\n")
+              env_file.write(f"AWS_SECRET_ACCESS_KEY={credentials['aws_secret_access_key']}\n")
+              env_file.write("AWS_DEFAULT_REGION=us-east-1\n")
+              env_file.write("AWS_REGION=us-east-1\n")
+          EOF
+        env:
+          CLOUD_CREDENTIALS: ${{ secrets.CLOUD_CREDENTIALS }}
 
       - name: Check eval gate
         run: |
           python - <<'EOF'
-          acc = float("${{ needs.train.outputs.accuracy }}")
-          if acc < 0.68:
-              raise SystemExit(f"FAILED: accuracy {acc:.4f} < 0.68. Huy deploy.")
-          print(f"PASSED: accuracy {acc:.4f} >= 0.68. Dang trien khai model.")
+          import json
+          import os
+
+          import boto3
+          from botocore.exceptions import ClientError
+
+          new_acc = float("${{ needs.train.outputs.accuracy }}")
+          bucket = os.environ["CLOUD_BUCKET"]
+          latest_metrics_key = "models/latest/metrics.json"
+
+          if new_acc < 0.68:
+              raise SystemExit(f"FAILED: accuracy {new_acc:.4f} < 0.68. Huy deploy.")
+
+          s3 = boto3.client("s3", region_name="us-east-1")
+          try:
+              response = s3.get_object(Bucket=bucket, Key=latest_metrics_key)
+              previous_metrics = json.loads(response["Body"].read().decode("utf-8"))
+              previous_acc = float(previous_metrics["accuracy"])
+              print(f"Previous deployed accuracy: {previous_acc:.4f}")
+          except ClientError as exc:
+              error_code = exc.response.get("Error", {}).get("Code")
+              if error_code in {"NoSuchKey", "404"}:
+                  previous_acc = None
+                  print("No previous deployed metrics found. First deploy is allowed.")
+              else:
+                  raise
+
+          print(f"Candidate accuracy: {new_acc:.4f}")
+          if previous_acc is not None and new_acc < previous_acc:
+              raise SystemExit(
+                  f"FAILED: candidate accuracy {new_acc:.4f} < "
+                  f"previous deployed accuracy {previous_acc:.4f}. Huy deploy."
+              )
+
+          print("PASSED: candidate model is eligible for deploy.")
           EOF
+        env:
+          CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
 
 
   # ---------------------------------------------------------------------------
@@ -228,6 +287,47 @@ jobs:
     needs: eval
     runs-on: ubuntu-latest
     steps:
+      - name: Authenticate to Cloud Storage
+        run: |
+          python - <<'EOF'
+          import json
+          import os
+
+          credentials = json.loads(os.environ["CLOUD_CREDENTIALS"])
+          with open(os.environ["GITHUB_ENV"], "a") as env_file:
+              env_file.write(f"AWS_ACCESS_KEY_ID={credentials['aws_access_key_id']}\n")
+              env_file.write(f"AWS_SECRET_ACCESS_KEY={credentials['aws_secret_access_key']}\n")
+              env_file.write("AWS_DEFAULT_REGION=us-east-1\n")
+              env_file.write("AWS_REGION=us-east-1\n")
+          EOF
+        env:
+          CLOUD_CREDENTIALS: ${{ secrets.CLOUD_CREDENTIALS }}
+
+      - name: Promote candidate model
+        run: |
+          python - <<'EOF'
+          import os
+
+          import boto3
+
+          bucket = os.environ["CLOUD_BUCKET"]
+          commit_sha = os.environ["GITHUB_SHA"]
+          s3 = boto3.client("s3", region_name="us-east-1")
+
+          promotions = {
+              f"models/candidates/{commit_sha}/model.pkl": "models/latest/model.pkl",
+              f"models/candidates/{commit_sha}/metrics.json": "models/latest/metrics.json",
+          }
+          for source_key, dest_key in promotions.items():
+              s3.copy_object(
+                  Bucket=bucket,
+                  CopySource={"Bucket": bucket, "Key": source_key},
+                  Key=dest_key,
+              )
+              print(f"Promoted s3://{bucket}/{source_key} to s3://{bucket}/{dest_key}")
+          EOF
+        env:
+          CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
 
       - name: SSH deploy to VM
         uses: appleboy/ssh-action@v1.0.3

@@ -1,0 +1,21 @@
+Model Performance Report
+model_type: random_forest
+accuracy: 0.7400
+f1_score: 0.7389
+
+Confusion Matrix
+labels: 0, 1, 2
+138 33 2
+45 170 12
+1 37 62
+
+Classification Report
+              precision    recall  f1-score   support
+
+           0       0.75      0.80      0.77       173
+           1       0.71      0.75      0.73       227
+           2       0.82      0.62      0.70       100
+
+    accuracy                           0.74       500
+   macro avg       0.76      0.72      0.74       500
+weighted avg       0.74      0.74      0.74       500
