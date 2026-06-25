@@ -1,0 +1,21 @@
+Model Performance Report
+model_type: gradient_boosting
+accuracy: 0.6140
+f1_score: 0.6107
+
+Confusion Matrix
+labels: 0, 1, 2
+118 51 4
+63 145 19
+3 53 44
+
+Classification Report
+              precision    recall  f1-score   support
+
+           0       0.64      0.68      0.66       173
+           1       0.58      0.64      0.61       227
+           2       0.66      0.44      0.53       100
+
+    accuracy                           0.61       500
+   macro avg       0.63      0.59      0.60       500
+weighted avg       0.62      0.61      0.61       500
