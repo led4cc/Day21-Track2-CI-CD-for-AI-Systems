@@ -48,7 +48,7 @@ Bước 1 chỉ chạy trên máy tính cá nhân. Bước 2 và Bước 3 sử 
 
 Phần mềm cần cài đặt trên máy tính cá nhân:
 
-- Python 3.10 trở lên
+- Python 3.10.x (khuyến nghị dùng đúng 3.10 vì các thư viện trong `requirements.txt` đang được pin theo môi trường CI)
 - Git và tài khoản GitHub (tạo một repo public mới, chưa có nội dung)
 - Tài khoản cloud (chọn một trong ba: GCP, AWS, hoặc Azure — gói miễn phí/trial đủ dùng cho lab này)
 - CLI của cloud provider đã chọn (xem hướng dẫn cài đặt chi tiết tại tasks/buoc-2.md)
@@ -56,7 +56,7 @@ Phần mềm cần cài đặt trên máy tính cá nhân:
 Kiểm tra cài đặt:
 
 ```bash
-python --version     # Python 3.10.x trở lên
+python --version     # Python 3.10.x
 git --version
 # Kiểm tra CLI của cloud provider đã chọn (một trong ba):
 gcloud --version     # GCP

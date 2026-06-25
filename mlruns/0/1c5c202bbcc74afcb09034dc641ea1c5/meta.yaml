@@ -1,0 +1,15 @@
+artifact_uri: file:///D:/Linh%27s%20Volume/VinUni/Day21-Track2-CI-CD-for-AI-Systems/mlruns/0/1c5c202bbcc74afcb09034dc641ea1c5/artifacts
+end_time: 1782365907388
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 1c5c202bbcc74afcb09034dc641ea1c5
+run_name: vaunted-bird-601
+run_uuid: 1c5c202bbcc74afcb09034dc641ea1c5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1782365903283
+status: 3
+tags: []
+user_id: nghie
