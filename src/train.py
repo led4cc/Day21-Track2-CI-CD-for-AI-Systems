@@ -5,10 +5,48 @@ import yaml
 import json
 import joblib
 import os
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 EVAL_THRESHOLD = 0.70
+
+
+def build_model(params: dict):
+    """
+    Tao mo hinh theo model_type trong params.yaml.
+
+    Tra ve:
+        model: mo hinh scikit-learn da cau hinh.
+        model_type: ten thuat toan dung de log len MLflow.
+        model_params: sieu tham so rieng cua thuat toan da chon.
+    """
+    model_type = params.get("model_type", "random_forest")
+    model_params = params.get(model_type, {})
+
+    if model_type == "random_forest":
+        model = RandomForestClassifier(**model_params, random_state=42)
+    elif model_type == "gradient_boosting":
+        model = GradientBoostingClassifier(**model_params, random_state=42)
+    elif model_type == "logistic_regression":
+        model = Pipeline(
+            [
+                ("scaler", StandardScaler()),
+                (
+                    "model",
+                    LogisticRegression(**model_params, random_state=42),
+                ),
+            ]
+        )
+    else:
+        raise ValueError(
+            "Unsupported model_type. Choose one of: "
+            "random_forest, gradient_boosting, logistic_regression"
+        )
+
+    return model, model_type, model_params
 
 
 def train(
@@ -20,7 +58,7 @@ def train(
     Huan luyen mo hinh va ghi nhan ket qua vao MLflow.
 
     Tham so:
-        params     : dict chua cac sieu tham so cho RandomForestClassifier.
+        params     : dict chua model_type va sieu tham so cho tung thuat toan.
         data_path  : duong dan den file du lieu huan luyen.
         eval_path  : duong dan den file du lieu danh gia.
 
@@ -41,11 +79,14 @@ def train(
     # Moi lan huan luyen duoc boc trong mot MLflow run de theo doi thi nghiem.
     with mlflow.start_run():
 
-        # Luu lai sieu tham so de co the so sanh giua cac lan chay.
-        mlflow.log_params(params)
+        # Tao mo hinh theo model_type de so sanh nhieu thuat toan trong Bonus 2.
+        model, model_type, model_params = build_model(params)
+
+        # Luu lai thuat toan va sieu tham so da dung de so sanh tren MLflow.
+        mlflow.log_param("model_type", model_type)
+        mlflow.log_params(model_params)
 
         # random_state giup ket qua co tinh tai tao trong lab va CI.
-        model = RandomForestClassifier(**params, random_state=42)
         model.fit(X_train, y_train)
 
         # Danh gia mo hinh tren tap eval doc lap voi tap huan luyen.

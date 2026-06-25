@@ -3,7 +3,8 @@ import json
 import mlflow
 import numpy as np
 import pandas as pd
-from src.train import train
+import pytest
+from src.train import build_model, train
 
 
 FEATURE_NAMES = [
@@ -43,13 +44,34 @@ def _use_temp_mlflow(tmp_path):
     mlflow.set_tracking_uri((tmp_path / "mlruns").as_uri())
 
 
+def _params(model_type="random_forest"):
+    """Tao params dung schema moi cua Bonus 2 cho cac test nho."""
+    return {
+        "model_type": model_type,
+        "random_forest": {
+            "n_estimators": 10,
+            "max_depth": 3,
+            "min_samples_split": 2,
+        },
+        "gradient_boosting": {
+            "n_estimators": 10,
+            "learning_rate": 0.1,
+            "max_depth": 2,
+        },
+        "logistic_regression": {
+            "C": 1.0,
+            "max_iter": 200,
+        },
+    }
+
+
 def test_train_returns_float(tmp_path):
     """Kiem tra ham train() tra ve mot so thuc nam trong [0.0, 1.0]."""
     _use_temp_mlflow(tmp_path)
     train_path, eval_path = _make_temp_data(tmp_path)
 
     acc = train(
-        {"n_estimators": 10, "max_depth": 3},
+        _params("random_forest"),
         data_path=train_path,
         eval_path=eval_path,
     )
@@ -63,7 +85,7 @@ def test_metrics_file_created(tmp_path):
     _use_temp_mlflow(tmp_path)
     train_path, eval_path = _make_temp_data(tmp_path)
     train(
-        {"n_estimators": 10, "max_depth": 3},
+        _params("random_forest"),
         data_path=train_path,
         eval_path=eval_path,
     )
@@ -80,9 +102,32 @@ def test_model_file_created(tmp_path):
     _use_temp_mlflow(tmp_path)
     train_path, eval_path = _make_temp_data(tmp_path)
     train(
-        {"n_estimators": 10, "max_depth": 3},
+        _params("random_forest"),
         data_path=train_path,
         eval_path=eval_path,
     )
 
     assert os.path.exists("models/model.pkl")
+
+
+def test_train_supports_gradient_boosting(tmp_path):
+    """Kiem tra co the huan luyen voi GradientBoostingClassifier."""
+    _use_temp_mlflow(tmp_path)
+    train_path, eval_path = _make_temp_data(tmp_path)
+
+    acc = train(
+        _params("gradient_boosting"),
+        data_path=train_path,
+        eval_path=eval_path,
+    )
+
+    assert isinstance(acc, float)
+    assert 0.0 <= acc <= 1.0
+
+
+def test_unsupported_model_type_raises_error():
+    """Kiem tra model_type khong ho tro tra ve loi ro rang."""
+    params = _params("svm")
+
+    with pytest.raises(ValueError, match="Unsupported model_type"):
+        build_model(params)
